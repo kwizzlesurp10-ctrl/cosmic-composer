@@ -1,6 +1,7 @@
 from models.transformer import CosmicTransformer
 from data.loader import AudioTextDataset
 import torch
+import os
 
 def train_model(dataset, epochs, batch_size):
     model = CosmicTransformer()
