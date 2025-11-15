@@ -28,6 +28,20 @@ export LOG_LEVEL="INFO"  # Optional
 
 ## Usage
 
+### Quick Start: Training
+
+1. **Create example dataset:**
+```bash
+python scripts/create_example_dataset.py --output-dir example_dataset --num-samples 20
+```
+
+2. **Train the model:**
+```bash
+python main.py train --dataset example_dataset --epochs 10 --batch-size 4
+```
+
+See `QUICK_START_TRAINING.md` for more details.
+
 ### Command Line Interface
 
 #### Generate Music
@@ -45,6 +59,14 @@ python main.py train \
     --epochs 50 \
     --batch-size 16
 ```
+
+The training script includes:
+- Automatic train/validation split
+- Progress bars and logging
+- Checkpoint saving (best model + regular checkpoints)
+- Learning rate scheduling
+- GPU support
+- Resume capability
 
 #### Start API Server
 ```bash
@@ -108,6 +130,23 @@ Each line in `metadata.jsonl` should be:
 ```json
 {"audio_file": "file1.wav", "text": "description", "neural": {"heart_rate": 90}}
 ```
+
+### Preparing Your Dataset
+
+**Option 1: Use the preparation script**
+```bash
+python scripts/prepare_dataset.py \
+    --mode directory \
+    --audio-dir /path/to/audio/files \
+    --output-dir my_dataset
+```
+
+**Option 2: Create example dataset for testing**
+```bash
+python scripts/create_example_dataset.py --output-dir example_dataset
+```
+
+See `TRAINING_GUIDE.md` for comprehensive training documentation.
 
 ## Neural Input
 

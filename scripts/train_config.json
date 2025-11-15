@@ -1,0 +1,26 @@
+{
+  "model": {
+    "d_model": 512,
+    "nhead": 8,
+    "num_layers": 6,
+    "dim_feedforward": 2048,
+    "audio_dim": 128,
+    "sample_rate": 44100
+  },
+  "training": {
+    "epochs": 50,
+    "batch_size": 16,
+    "learning_rate": 1e-4,
+    "validation_split": 0.2,
+    "save_every": 5
+  },
+  "data": {
+    "sample_rate": 44100,
+    "max_audio_length": 352800,
+    "num_workers": 2
+  },
+  "checkpoint": {
+    "dir": "models",
+    "name": "checkpoint.pth"
+  }
+}
