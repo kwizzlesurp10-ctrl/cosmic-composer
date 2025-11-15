@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch
 import json
+import torch
 
 from main import refine_prompt_with_gemini, generate_music
 

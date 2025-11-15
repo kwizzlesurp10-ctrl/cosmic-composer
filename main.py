@@ -89,7 +89,11 @@ def main():
 
     if args.mode == 'train':
         dataset = AudioTextDataset(args.dataset)
-        train_model(dataset, args.epochs, args.batch_size)
+        train_model(
+            dataset=dataset,
+            epochs=args.epochs,
+            batch_size=args.batch_size
+        )
     elif args.mode == 'generate':
         neural_input = json.loads(args.neural_input)
         output = generate_music(args.prompt, neural_input, args.output_file)
