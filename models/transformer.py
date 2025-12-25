@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from typing import Dict, Optional
+from functools import lru_cache
 
 
 class CosmicTransformer(nn.Module):
@@ -45,6 +46,7 @@ class CosmicTransformer(nn.Module):
         self.d_model = d_model
         self.audio_dim = audio_dim
         self.sample_rate = sample_rate
+        self._device = None  # Cache device for efficient checks
         
         # Text embedding
         self.text_embedding = nn.Embedding(vocab_size, d_model)
@@ -123,6 +125,12 @@ class CosmicTransformer(nn.Module):
         
         return audio
     
+    def _get_device(self) -> torch.device:
+        """Get model device efficiently with caching."""
+        if self._device is None:
+            self._device = next(self.parameters()).device
+        return self._device
+    
     def _extract_neural_features(self, neural_input: Dict, batch_size: int) -> torch.Tensor:
         """Extract neural features into a tensor."""
         features = []
@@ -136,14 +144,22 @@ class CosmicTransformer(nn.Module):
             key = f'feature_{i}'
             features.append(neural_input.get(key, 0.0))
         
-        # Create tensor
-        neural_tensor = torch.tensor(features, dtype=torch.float32)
-        neural_tensor = neural_tensor.unsqueeze(0).repeat(batch_size, 1)
-        
-        if self.training and neural_tensor.device.type == 'cuda':
-            neural_tensor = neural_tensor.cuda()
+        # Create tensor on correct device directly
+        device = self._get_device()
+        neural_tensor = torch.tensor(features, dtype=torch.float32, device=device)
+        neural_tensor = neural_tensor.unsqueeze(0).expand(batch_size, -1)
         
         return neural_tensor
+    
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def _simple_tokenize(text: str) -> tuple:
+        """Simple tokenization with caching (replace with proper tokenizer in production)."""
+        # Convert text to simple integer tokens
+        tokens = tuple(hash(c) % 10000 for c in text[:100])  # Limit to 100 chars, use tuple for caching
+        if not tokens:
+            tokens = (0,)  # At least one token
+        return tokens
     
     def generate(self, prompt: str, neural_input: Dict, max_length: int = 44100 * 8) -> torch.Tensor:
         """
@@ -159,13 +175,9 @@ class CosmicTransformer(nn.Module):
         """
         self.eval()
         
-        # Simple tokenization (in production, use proper tokenizer)
-        # For now, create dummy tokens
-        tokens = self._simple_tokenize(prompt)
-        text_tokens = torch.tensor([tokens], dtype=torch.long)
-        
-        if next(self.parameters()).is_cuda:
-            text_tokens = text_tokens.cuda()
+        # Use cached tokenization
+        tokens = list(self._simple_tokenize(prompt))
+        text_tokens = torch.tensor([tokens], dtype=torch.long, device=self._get_device())
         
         with torch.no_grad():
             audio = self.forward(text_tokens, neural_input)
@@ -174,20 +186,10 @@ class CosmicTransformer(nn.Module):
         if audio.size(1) > max_length:
             audio = audio[:, :max_length]
         elif audio.size(1) < max_length:
-            padding = torch.zeros(1, max_length - audio.size(1))
-            if audio.is_cuda:
-                padding = padding.cuda()
+            padding = torch.zeros(1, max_length - audio.size(1), device=audio.device)
             audio = torch.cat([audio, padding], dim=1)
         
         return audio.squeeze(0)  # Remove batch dimension
-    
-    def _simple_tokenize(self, text: str) -> list:
-        """Simple tokenization (replace with proper tokenizer in production)."""
-        # Convert text to simple integer tokens
-        tokens = [hash(c) % 10000 for c in text[:100]]  # Limit to 100 chars
-        if not tokens:
-            tokens = [0]  # At least one token
-        return tokens
     
     def train_step(self, audio: torch.Tensor, text: torch.Tensor, neural: Dict) -> torch.Tensor:
         """

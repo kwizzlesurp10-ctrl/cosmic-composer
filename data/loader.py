@@ -8,6 +8,7 @@ import torch
 from torch.utils.data import Dataset
 from typing import Dict, List, Optional
 import numpy as np
+from functools import lru_cache
 
 
 class AudioTextDataset(Dataset):
@@ -43,6 +44,7 @@ class AudioTextDataset(Dataset):
         self.sample_rate = sample_rate
         self.max_audio_length = max_audio_length
         self.transform = transform
+        self._resampler_cache = {}  # Cache resamplers for different sample rates
         
         # Load metadata
         metadata_file = os.path.join(dataset_path, 'metadata.jsonl')
@@ -124,9 +126,11 @@ class AudioTextDataset(Dataset):
             import torchaudio
             waveform, sr = torchaudio.load(audio_file)
             
-            # Resample if needed
+            # Resample if needed using cached resampler
             if sr != self.sample_rate:
-                resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+                if sr not in self._resampler_cache:
+                    self._resampler_cache[sr] = torchaudio.transforms.Resample(sr, self.sample_rate)
+                resampler = self._resampler_cache[sr]
                 waveform = resampler(waveform)
             
             # Convert to mono if stereo
@@ -148,9 +152,11 @@ class AudioTextDataset(Dataset):
             print(f"Warning: Could not load {audio_file}: {e}. Using dummy audio.")
             return torch.randn(self.max_audio_length) * 0.1
     
-    def _tokenize_text(self, text: str) -> torch.Tensor:
+    @staticmethod
+    @lru_cache(maxsize=1024)
+    def _tokenize_text(text: str) -> torch.Tensor:
         """
-        Simple text tokenization.
+        Simple text tokenization with caching.
         
         Args:
             text: Input text
