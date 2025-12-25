@@ -227,8 +227,11 @@ class ResearchStrategyFormulator:
                         seen_lower.add(related_lower)
         
         # Also check if question mentions RAG/retrieval - add vector search if not already present
-        if ('rag' in question_lower or 'retrieval' in question_lower) and 'vector search' not in seen_lower:
-            expanded_concepts.append('Vector Search')
+        if ('rag' in question_lower or 'retrieval' in question_lower):
+            vector_search_lower = 'vector search'
+            if vector_search_lower not in seen_lower:
+                expanded_concepts.append('Vector Search')
+                seen_lower.add(vector_search_lower)
         
         return expanded_concepts
     

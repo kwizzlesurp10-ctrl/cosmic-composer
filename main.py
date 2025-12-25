@@ -23,12 +23,18 @@ from data.loader import AudioTextDataset  # For training
 logging.basicConfig(level=os.environ.get('LOG_LEVEL', 'INFO'), stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
+# Configure Gemini API once at module level
+try:
+    if 'GEMINI_API_KEY' in os.environ:
+        genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+except Exception as e:
+    logger.warning(f"Failed to configure Gemini API: {e}")
+
 # Gemini bootstrap function with caching
 @lru_cache(maxsize=128)
 def _cached_gemini_call(gemini_prompt: str) -> str:
     """Cached Gemini API call to avoid redundant requests."""
     try:
-        genai.configure(api_key=os.environ['GEMINI_API_KEY'])
         model = genai.GenerativeModel('gemini-pro')
         response = model.generate_content(gemini_prompt)
         return response.text

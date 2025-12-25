@@ -11,6 +11,17 @@ from typing import Dict, Optional
 from functools import lru_cache
 
 
+# Module-level cached tokenization function
+@lru_cache(maxsize=1024)
+def _cached_tokenize(text: str) -> tuple:
+    """Simple tokenization with caching (replace with proper tokenizer in production)."""
+    # Convert text to simple integer tokens
+    tokens = tuple(hash(c) % 10000 for c in text[:100])  # Limit to 100 chars, use tuple for caching
+    if not tokens:
+        tokens = (0,)  # At least one token
+    return tokens
+
+
 class CosmicTransformer(nn.Module):
     """
     Transformer-based model for generating music from text prompts and neural inputs.
@@ -151,16 +162,6 @@ class CosmicTransformer(nn.Module):
         
         return neural_tensor
     
-    @staticmethod
-    @lru_cache(maxsize=1024)
-    def _simple_tokenize(text: str) -> tuple:
-        """Simple tokenization with caching (replace with proper tokenizer in production)."""
-        # Convert text to simple integer tokens
-        tokens = tuple(hash(c) % 10000 for c in text[:100])  # Limit to 100 chars, use tuple for caching
-        if not tokens:
-            tokens = (0,)  # At least one token
-        return tokens
-    
     def generate(self, prompt: str, neural_input: Dict, max_length: int = 44100 * 8) -> torch.Tensor:
         """
         Generate audio from text prompt and neural input.
@@ -176,7 +177,7 @@ class CosmicTransformer(nn.Module):
         self.eval()
         
         # Use cached tokenization
-        tokens = list(self._simple_tokenize(prompt))
+        tokens = list(_cached_tokenize(prompt))
         text_tokens = torch.tensor([tokens], dtype=torch.long, device=self._get_device())
         
         with torch.no_grad():
