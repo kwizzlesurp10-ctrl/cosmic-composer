@@ -8,6 +8,26 @@ import torch
 from torch.utils.data import Dataset
 from typing import Dict, List, Optional
 import numpy as np
+from functools import lru_cache
+
+
+# Module-level cached tokenization function
+@lru_cache(maxsize=1024)
+def _cached_tokenize_text(text: str) -> torch.Tensor:
+    """
+    Simple text tokenization with caching.
+    
+    Args:
+        text: Input text
+        
+    Returns:
+        Token tensor [seq_len]
+    """
+    # Simple hash-based tokenization (replace with proper tokenizer)
+    tokens = [hash(c) % 10000 for c in text[:100]]
+    if not tokens:
+        tokens = [0]
+    return torch.tensor(tokens, dtype=torch.long)
 
 
 class AudioTextDataset(Dataset):
@@ -43,6 +63,7 @@ class AudioTextDataset(Dataset):
         self.sample_rate = sample_rate
         self.max_audio_length = max_audio_length
         self.transform = transform
+        self._resampler_cache = {}  # Cache resamplers for different sample rates
         
         # Load metadata
         metadata_file = os.path.join(dataset_path, 'metadata.jsonl')
@@ -99,7 +120,7 @@ class AudioTextDataset(Dataset):
         
         # Process text
         text = item.get('text', '')
-        text_tokens = self._tokenize_text(text)
+        text_tokens = _cached_tokenize_text(text)
         
         # Get neural input
         neural = item.get('neural', {})
@@ -124,9 +145,11 @@ class AudioTextDataset(Dataset):
             import torchaudio
             waveform, sr = torchaudio.load(audio_file)
             
-            # Resample if needed
+            # Resample if needed using cached resampler
             if sr != self.sample_rate:
-                resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+                if sr not in self._resampler_cache:
+                    self._resampler_cache[sr] = torchaudio.transforms.Resample(sr, self.sample_rate)
+                resampler = self._resampler_cache[sr]
                 waveform = resampler(waveform)
             
             # Convert to mono if stereo
@@ -147,19 +170,3 @@ class AudioTextDataset(Dataset):
             # Return dummy audio if file doesn't exist
             print(f"Warning: Could not load {audio_file}: {e}. Using dummy audio.")
             return torch.randn(self.max_audio_length) * 0.1
-    
-    def _tokenize_text(self, text: str) -> torch.Tensor:
-        """
-        Simple text tokenization.
-        
-        Args:
-            text: Input text
-            
-        Returns:
-            Token tensor [seq_len]
-        """
-        # Simple hash-based tokenization (replace with proper tokenizer)
-        tokens = [hash(c) % 10000 for c in text[:100]]
-        if not tokens:
-            tokens = [0]
-        return torch.tensor(tokens, dtype=torch.long)

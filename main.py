@@ -4,6 +4,7 @@ import sys
 import json
 import logging
 from typing import Dict
+from functools import lru_cache
 
 import torch
 import google.generativeai as genai
@@ -13,6 +14,7 @@ import uvicorn
 # Import project modules (assuming paths are set)
 from models.transformer import CosmicTransformer
 from models.diffusion import AudioDiffusion  # For hybrid use if needed
+from models.cache import get_cached_model
 from scripts.train import train_model
 from api.app import create_app  # FastAPI app factory
 from data.loader import AudioTextDataset  # For training
@@ -21,13 +23,28 @@ from data.loader import AudioTextDataset  # For training
 logging.basicConfig(level=os.environ.get('LOG_LEVEL', 'INFO'), stream=sys.stdout)
 logger = logging.getLogger(__name__)
 
-# Gemini bootstrap function
+# Configure Gemini API once at module level
+try:
+    if 'GEMINI_API_KEY' in os.environ:
+        genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+except Exception as e:
+    logger.warning(f"Failed to configure Gemini API: {e}")
+
+# Gemini bootstrap function with caching
+@lru_cache(maxsize=128)
+def _cached_gemini_call(gemini_prompt: str) -> str:
+    """Cached Gemini API call to avoid redundant requests."""
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content(gemini_prompt)
+        return response.text
+    except Exception as e:
+        logger.warning(f"Gemini API call failed: {e}")
+        raise
+
 def refine_prompt_with_gemini(raw_prompt: str, neural_input: Dict) -> str:
     """Use Gemini-Pro to refine prompt with neural data integration."""
     try:
-        genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-        model = genai.GenerativeModel('gemini-pro')
-        
         # Calculated neural modulation equation
         if 'heart_rate' in neural_input:
             hr = neural_input['heart_rate']
@@ -37,8 +54,7 @@ def refine_prompt_with_gemini(raw_prompt: str, neural_input: Dict) -> str:
             neural_desc = ""
         
         gemini_prompt = f"Enhance this music prompt for AI generation: '{raw_prompt}'. Incorporate emotional cues{neural_desc}. Output detailed description."
-        response = model.generate_content(gemini_prompt)
-        return response.text
+        return _cached_gemini_call(gemini_prompt)
     except KeyError:
         logger.error("GEMINI_API_KEY not set.")
         sys.exit(1)
@@ -52,7 +68,7 @@ def generate_music(prompt: str, neural_input: Dict, output_file: str) -> str:
     refined_prompt = refine_prompt_with_gemini(prompt, neural_input)
     logger.info(f"Refined prompt: {refined_prompt}")
     
-    model = CosmicTransformer.load(os.environ.get('MODEL_CHECKPOINT', 'models/checkpoint.pth'))
+    model = get_cached_model(os.environ.get('MODEL_CHECKPOINT', 'models/checkpoint.pth'))
     audio = model.generate(refined_prompt, neural_input)  # Assume generate returns torch tensor
     
     # Save audio (using torchaudio or ffmpeg)

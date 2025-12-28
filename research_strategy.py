@@ -198,29 +198,40 @@ class ResearchStrategyFormulator:
         }
         
         expanded_concepts = []
+        seen_lower = set()  # Track concepts case-insensitively
         question_lower = question.lower()
         
         # Process each concept
         for concept in key_concepts:
-            # Add the concept itself
-            if concept not in expanded_concepts:
+            concept_lower = concept.lower()
+            
+            # Add the concept itself if not seen
+            if concept_lower not in seen_lower:
                 expanded_concepts.append(concept)
+                seen_lower.add(concept_lower)
             
             # Expand acronyms
             if concept in acronym_expansions:
                 expanded = acronym_expansions[concept]
-                if expanded not in expanded_concepts:
+                expanded_lower = expanded.lower()
+                if expanded_lower not in seen_lower:
                     expanded_concepts.append(expanded)
+                    seen_lower.add(expanded_lower)
             
             # Add related terms
             if concept in related_terms_map:
                 for related_term in related_terms_map[concept]:
-                    if related_term not in expanded_concepts:
+                    related_lower = related_term.lower()
+                    if related_lower not in seen_lower:
                         expanded_concepts.append(related_term)
+                        seen_lower.add(related_lower)
         
         # Also check if question mentions RAG/retrieval - add vector search if not already present
-        if ('rag' in question_lower or 'retrieval' in question_lower) and 'Vector Search' not in expanded_concepts:
-            expanded_concepts.append('Vector Search')
+        if ('rag' in question_lower or 'retrieval' in question_lower):
+            vector_search_lower = 'vector search'
+            if vector_search_lower not in seen_lower:
+                expanded_concepts.append('Vector Search')
+                seen_lower.add(vector_search_lower)
         
         return expanded_concepts
     
